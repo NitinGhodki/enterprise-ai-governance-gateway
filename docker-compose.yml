@@ -1,0 +1,143 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: governance
+      POSTGRES_USER: governance
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-governance}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U governance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Memory limit: 150MB
+    mem_limit: 150m
+    networks:
+      - internal
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 45mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Memory limit: 50MB
+    mem_limit: 50m
+    networks:
+      - internal
+
+  # ── Python Governance Service ───────────────────────────────────────────────
+  governance:
+    build:
+      context: ./governance
+      dockerfile: Dockerfile
+    environment:
+      HF_API_KEY: ${HF_API_KEY}
+      HF_MODEL: ${HF_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
+      ENVIRONMENT: production
+      LOG_LEVEL: INFO
+      SAFETY_PII_REDACT: "true"
+      QUALITY_MIN_FAITHFULNESS: "0.70"
+      MAX_CONCURRENT_EVALS: "4"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # allow time for model loading
+    # Memory limit: 250MB
+    mem_limit: 250m
+    networks:
+      - internal
+    # NOT exposed externally — only accessible to Java gateway
+
+  # ── Java Gateway ────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: governance
+      DB_USER: governance
+      DB_PASSWORD: ${DB_PASSWORD:-governance}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GOVERNANCE_URL: http://governance:8000
+      HF_API_KEY: ${HF_API_KEY}
+      HF_MODEL: ${HF_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
+      JWT_SECRET: ${JWT_SECRET:-changeme-minimum-32-chars-required}
+      LLM_PROVIDER: ${LLM_PROVIDER:-huggingface}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-20}
+      JAVA_OPTS: >-
+        -XX:+UseContainerSupport
+        -XX:MaxRAMPercentage=35
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=200
+        -Djava.security.egd=file:/dev/./urandom
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      governance:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    # Memory limit: 350MB (300MB heap + 50MB JVM overhead)
+    mem_limit: 350m
+    networks:
+      - internal
+      - external
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    mem_limit: 100m
+    networks:
+      - internal
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    mem_limit: 100m
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  grafana_data:
+
+networks:
+  internal:
+    driver: bridge
+  external:
+    driver: bridge
