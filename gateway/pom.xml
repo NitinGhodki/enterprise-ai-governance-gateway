@@ -102,9 +102,17 @@
         </dependency>
 
         <!-- Rate limiting -->
+        <!-- 1. The Core Rate Limiting Engine -->
         <dependency>
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+
+        <!-- 2. The Native Redis/Lettuce Driver Extensions -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-lettuce</artifactId>
             <version>${bucket4j.version}</version>
         </dependency>
 

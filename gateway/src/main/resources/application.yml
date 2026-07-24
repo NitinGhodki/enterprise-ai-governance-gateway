@@ -89,9 +89,9 @@ gateway:
 
   rate-limit:
     # Default: 20 requests per minute per user
-    requests-per-minute: ${RATE_LIMIT_RPM:20}
+    requests-per-minute: ${RATE_LIMIT_RPM:5}
     # Burst: 5 extra requests allowed before throttling
-    burst-capacity: ${RATE_LIMIT_BURST:5}
+    burst-capacity: ${RATE_LIMIT_BURST:2}
 
   llm:
     huggingface:
