@@ -3,7 +3,7 @@
 # Using a full Python image to compile any C extensions,
 # then copying only the installed packages to the runtime stage.
 # ═══════════════════════════════════════════════════════════════
-FROM python:3.12-slim AS deps
+FROM python:3.12-slim AS builder
 
 WORKDIR /install
 
@@ -14,6 +14,7 @@ WORKDIR /install
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
+        gcc \
         curl && \
     rm -rf /var/lib/apt/lists/*
 
@@ -27,19 +28,30 @@ COPY requirements.txt ./
 RUN pip install \
         --no-cache-dir \
         --prefix=/install/packages \
-        --no-compile \
+        --no-warn-script-location \
         -r requirements.txt
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 2: Download spaCy model
 # spaCy requires a separate download step after pip install
 # ═══════════════════════════════════════════════════════════════
-FROM deps AS model-download
 
-# en_core_web_sm: small English NLP model for PII entity recognition
-# ~12MB, sufficient for person/email/phone/credit card detection
+# Download spaCy model into the installed packages directory
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_sm
+    python -m spacy download en_core_web_sm && \
+    # Verify model loaded correctly
+    PYTHONPATH=/install/packages/lib/python3.12/site-packages \
+    python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
+
+# Pre-download sentence-transformers model during build
+# Avoids 30-60s download on first container startup
+# Model cached in HuggingFace's default cache directory
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
+    python -c "
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')
+"
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 3: Runtime — minimal image
@@ -51,45 +63,53 @@ FROM python:3.12-slim AS runtime
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    # Remove pip from runtime — packages are pre-installed
+    pip uninstall -y pip setuptools wheel 2>/dev/null || true
 
-# Security: non-root user
-RUN addgroup --system governance && \
-    adduser --system --ingroup governance governance
+# Non-root user
+RUN groupadd -g 10001 governance && \
+    useradd -u 10001 -g governance -s /sbin/nologin governance
 
 WORKDIR /app
 
-# Copy installed packages from deps stage
-COPY --from=model-download /install/packages /usr/local
+# Copy installed packages from builder
+COPY --from=builder /install/packages /usr/local
 
-# Copy spaCy model data
-COPY --from=model-download \
-    /usr/local/lib/python3.12/site-packages/en_core_web_sm \
-    /usr/local/lib/python3.12/site-packages/en_core_web_sm
+
+# Copy HuggingFace model cache (sentence-transformers model)
+COPY --from=builder /root/.cache/huggingface /home/governance/.cache/huggingface
+
+# Set correct ownership on model cache
+RUN chown -R 10001:10001 /home/governance/.cache
 
 # Copy application source
-COPY --chown=governance:governance app/ app/
+COPY --chown=10001:10001 app/ app/
 
-USER governance
+# Switch to non-root
+USER 10001:10001
+
+# Environment for Python optimisation in production
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=random \
+    HF_HOME=/home/governance/.cache/huggingface
 
 EXPOSE 8000
 
-# Health check: curl to /health endpoint
-# start-period=60s: allow time for sentence-transformers model loading
 HEALTHCHECK \
     --interval=30s \
-    --timeout=10s \
-    --start-period=60s \
+    --timeout=15s \
+    --start-period=90s \
     --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# uvicorn configuration:
-#   --workers 1:        single worker — model loaded once in memory
-#                       multiple workers × model size = OOM
-#   --loop uvloop:      faster async event loop (C extension)
-#   --http httptools:   faster HTTP parser (C extension)
-#   --no-access-log:    reduces I/O overhead, structured logging handles this
-#   --timeout-keep-alive 30: close idle connections after 30s
+# uvicorn production configuration:
+#   --workers 1:            single worker — embedding model loaded once
+#   --loop uvloop:          faster async event loop
+#   --http httptools:       faster HTTP parsing
+#   --no-access-log:        structured logging handles access logs
+#   --timeout-graceful-shutdown 30: allow in-flight requests to complete
 CMD ["python", "-m", "uvicorn", \
     "app.main:app", \
     "--host", "0.0.0.0", \
@@ -98,4 +118,4 @@ CMD ["python", "-m", "uvicorn", \
     "--loop", "uvloop", \
     "--http", "httptools", \
     "--no-access-log", \
-    "--timeout-keep-alive", "30"]
+    "--timeout-graceful-shutdown", "30"]
