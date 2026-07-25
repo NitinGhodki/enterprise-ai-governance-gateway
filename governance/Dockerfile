@@ -46,12 +46,8 @@ RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
 # Pre-download sentence-transformers model during build
 # Avoids 30-60s download on first container startup
 # Model cached in HuggingFace's default cache directory
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -c "
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')
-"
+# Pre-download sentence-transformers model during build
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2'); print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')"
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 3: Runtime — minimal image
