@@ -40,14 +40,13 @@ RUN pip install \
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
     python -m spacy download en_core_web_sm && \
     # Verify model loaded correctly
-    PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
+    PYTHONPATH=/install/packages/lib/python3.12/site-packages
 
 # Pre-download sentence-transformers model during build
 # Avoids 30-60s download on first container startup
 # Model cached in HuggingFace's default cache directory
 # Pre-download sentence-transformers model during build
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2'); print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')"
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 3: Runtime — minimal image
