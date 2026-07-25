@@ -50,7 +50,7 @@ public class SemanticCacheService {
             @Qualifier("cacheRedisTemplate")
             ReactiveRedisTemplate<String, CacheEntryDto> cacheRedisTemplate,
 
-            @Qualifier("stringRedisTemplate")
+            @Qualifier("reactiveStringRedisTemplate")
             ReactiveRedisTemplate<String, String> indexRedisTemplate,
 
             GovernanceClient governanceClient,

@@ -52,13 +52,15 @@ public class LlmProxyService {
     private final GovernanceClient        governanceClient;
     private final AuditService auditService;
     private final String                  defaultProvider;
+    private final BudgetService           budgetService;
 
     public LlmProxyService(
             List<LlmAdapter> adapters,
             SemanticCacheService cacheService,
             GovernanceClient governanceClient,
             AuditService auditService,
-            @Value("${gateway.llm.default-provider}") String defaultProvider) {
+            @Value("${gateway.llm.default-provider}") String defaultProvider,
+            BudgetService budgetService) {
 
         // Build adapter map: providerName → adapter
         // Allows O(1) lookup by name rather than iterating the list
@@ -72,6 +74,7 @@ public class LlmProxyService {
         this.governanceClient  = governanceClient;
         this.auditService      = auditService;
         this.defaultProvider   = defaultProvider;
+        this.budgetService     = budgetService;
 
         log.info("LlmProxyService ready. Adapters: {} Default: {}",
                 this.adapters.keySet(), defaultProvider);
@@ -142,7 +145,7 @@ public class LlmProxyService {
 
         LlmAdapter adapter = resolveAdapter(provider);
 
-        // Step 2a: Input safety check 
+        // Step 1: Safety check
         SafetyCheckRequest safetyReq =
                 new SafetyCheckRequest(
                         requestId, userId,
@@ -153,8 +156,7 @@ public class LlmProxyService {
 
         return governanceClient.checkSafety(safetyReq)
                 .flatMap(safetyResult -> {
-                    // Safety BLOCKED — exception thrown inside checkSafety()
-                    // and propagated here. This flatMap only runs if safe.
+
                     if (!safetyResult.isSafe()) {
                         return Mono.error(new GovernanceViolationException(
                                 "SAFETY",
@@ -163,32 +165,28 @@ public class LlmProxyService {
                         ));
                     }
 
-                    // Use redacted message if PII was found
                     String effectiveMessage = safetyResult.redactedMessage() != null
                             ? safetyResult.redactedMessage()
                             : request.message();
 
-                    log.debug("[Proxy] Safety passed requestId={} piiRedacted={}",
-                            requestId, safetyResult.piiDetected());
+                    // Step 2: Budget pre-check
+                    // Estimate cost from input tokens only (conservative overestimate)
+                    // ~0.75 tokens per word × input length / 1000 × price per 1K
+                    int estimatedInputTokens = request.message().split("\\s+").length;
+                    double estimatedCost = (estimatedInputTokens / 1000.0) * 0.0002;
 
-                    // Step 2b: LLM completion 
-                    CompletionRequest completionReq =
-                            new CompletionRequest(
-                                    model,
-                                    request.systemPrompt(),
-                                    effectiveMessage,
-                                    512,
-                                    0.7,
-                                    requestId
-                            );
-
-                    return adapter.complete(completionReq)
+                    return budgetService.checkBudget(userId, estimatedCost)
+                            .then(
+                                    // Step 3: LLM call
+                                    adapter.complete(new CompletionRequest(
+                                            model, request.systemPrompt(),
+                                            effectiveMessage, 512, 0.7, requestId
+                                    ))
+                            )
                             .flatMap(completionResult ->
-                                    // ── Steps 3 & 4: Quality + cost (parallel) ─────
                                     runPostGenerationChecks(
-                                            request, userId, requestId,
-                                            startMs, provider, safetyResult,
-                                            completionResult
+                                            request, userId, requestId, startMs,
+                                            provider, safetyResult, completionResult
                                     )
                             );
                 });
@@ -293,6 +291,7 @@ public class LlmProxyService {
                             qualityResult.overallScore(),
                             safetyResult.violations()
                     );
+                    budgetService.deductAsync(userId, costResult.costUsd());
 
                     return Mono.just(response);
                 });

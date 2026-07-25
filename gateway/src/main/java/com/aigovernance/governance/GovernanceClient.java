@@ -11,7 +11,6 @@ import com.aigovernance.dto.response.QualityCheckResponse;
 import com.aigovernance.dto.response.SafetyCheckResponse;
 import com.aigovernance.exception.GatewayException;
 import com.aigovernance.exception.GovernanceViolationException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,15 +42,16 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class GovernanceClient {
 
-    @Qualifier("governanceWebClient")
     private final WebClient webClient;
 
     @Value("${gateway.governance.base-url}")
     private String governanceBaseUrl;
 
+    public GovernanceClient(@Qualifier("governanceWebClient") WebClient webClient) {
+        this.webClient = webClient;
+    }
     /**
      * Check input safety. NEVER skipped — no fallback.
      * A governance service failure on safety check blocks the request.

@@ -12,8 +12,8 @@ spring:
   # R2DBC — reactive PostgreSQL
   r2dbc:
     url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:governance}
-    username: ${DB_USER:governance}
-    password: ${DB_PASSWORD:governance}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:12345}
     pool:
       initial-size: 2
       max-size: 10          # kept low for memory budget
@@ -23,8 +23,8 @@ spring:
   # Flyway uses JDBC (not R2DBC) — separate datasource
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:governance}
-    username: ${DB_USER:governance}
-    password: ${DB_PASSWORD:governance}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:12345}
     driver-class-name: org.postgresql.Driver
 
   flyway:

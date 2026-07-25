@@ -120,17 +120,20 @@ services:
 
   # ── Grafana ─────────────────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    mem_limit: 100m
-    networks:
-      - internal
+  image: grafana/grafana:latest
+  ports:
+    - "3000:3000"
+  environment:
+    GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    GF_USERS_ALLOW_SIGN_UP: "false"
+    GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+  volumes:
+    - grafana_data:/var/lib/grafana
+    - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    - ./monitoring/grafana/dashboard.json:/var/lib/grafana/dashboards/gateway.json:ro
+  mem_limit: 100m
+  networks:
+    - internal
 
 volumes:
   postgres_data:
