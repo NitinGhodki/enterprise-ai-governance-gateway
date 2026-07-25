@@ -59,7 +59,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,prometheus,info
+        include: health,metrics,prometheus,info,debug
   endpoint:
     health:
       show-details: always
@@ -97,7 +97,7 @@ gateway:
     huggingface:
       base-url: https://api-inference.huggingface.co/v1
       api-key: ${HF_API_KEY:}
-      model: ${HF_MODEL:mistralai/Mistral-7B-Instruct-v0.3}
+      model: ${HF_MODEL:google/gemma-4-26B-A4B-it}
       timeout-seconds: 60
     ollama:
       base-url: ${OLLAMA_URL:http://localhost:11434}

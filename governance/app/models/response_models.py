@@ -2,13 +2,21 @@
 response_models.py — Pydantic v2 models for all outbound responses.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AliasGenerator
+from pydantic.alias_generators import to_camel
 from typing import Optional
 
 
 class SafetyCheckResponse(BaseModel):
     """Response from /governance/safety"""
 
+    model_config = {
+        "alias_generator": AliasGenerator(
+            serialization_alias=to_camel # Write camelCase back out to Java
+        ),
+        "populate_by_name": True
+    }
+    
     request_id: str
     is_safe: bool
     violations: list[str] = Field(default_factory=list)

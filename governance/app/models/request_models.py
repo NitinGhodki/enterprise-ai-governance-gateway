@@ -5,7 +5,8 @@ of unexpected parameters that could alter governance behaviour.
 """
 
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, AliasGenerator  
+from pydantic.alias_generators import to_camel
 from typing import Optional
 
 
@@ -20,8 +21,14 @@ class SafetyCheckRequest(BaseModel):
     Sent by Java gateway BEFORE forwarding to LLM provider.
     """
 
-    model_config = {"extra": "forbid"}  # reject unknown fields
-
+    model_config = {
+        "extra": "forbid",
+        "alias_generator": AliasGenerator(
+            validation_alias=to_camel,  # Read camelCase from incoming JSON
+            serialization_alias=to_camel # Write camelCase back out if needed
+        ),
+        "populate_by_name": True  # Allows Python code to still use snake_case keyword args
+    }
     request_id: str = Field(
         ...,
         min_length=1,

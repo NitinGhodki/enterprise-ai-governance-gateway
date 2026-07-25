@@ -54,6 +54,12 @@ public class LlmProxyService {
     private final String                  defaultProvider;
     private final BudgetService           budgetService;
 
+    @Value("${gateway.llm.huggingface.model}")
+    String huggingFaceModel;
+
+    @Value("${gateway.llm.ollama.model}")
+    String localModel;
+
     public LlmProxyService(
             List<LlmAdapter> adapters,
             SemanticCacheService cacheService,
@@ -311,9 +317,9 @@ public class LlmProxyService {
             return request.model();
         }
         return switch (provider) {
-            case "ollama"      -> "mistral";
-            case "huggingface" -> "mistralai/Mistral-7B-Instruct-v0.3";
-            default            -> "mistralai/Mistral-7B-Instruct-v0.3";
+            case "ollama"      -> localModel;
+            case "huggingface" -> huggingFaceModel;
+            default            -> huggingFaceModel;
         };
     }
 

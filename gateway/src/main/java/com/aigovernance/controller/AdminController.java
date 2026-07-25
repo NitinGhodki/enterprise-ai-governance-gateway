@@ -1,7 +1,5 @@
 package com.aigovernance.controller;
 
-import com.aigovernance.audit.AuditRepository;
-import com.aigovernance.auth.UserRepository;
 import com.aigovernance.dto.SystemStats;
 import com.aigovernance.dto.request.BudgetUpdateRequest;
 import com.aigovernance.dto.response.BudgetResponse;
@@ -9,20 +7,15 @@ import com.aigovernance.dto.response.UserSummary;
 import com.aigovernance.dto.response.ViolationSummary;
 import com.aigovernance.model.AuditEvent;
 import com.aigovernance.service.AdminService;
-import com.aigovernance.service.impl.BudgetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * AdminController — management endpoints for ADMIN role only.
@@ -46,11 +39,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
-
-    private final AuditRepository auditRepository;
-    private final UserRepository  userRepository;
-    private final BudgetService budgetService;
-    private final DatabaseClient  databaseClient;
 
     private final AdminService adminService;
 
