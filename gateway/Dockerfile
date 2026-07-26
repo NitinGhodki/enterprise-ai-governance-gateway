@@ -11,7 +11,7 @@ RUN apk add --no-cache git
 
 # Copy Maven wrapper and POM first — cached until pom.xml changes
 COPY mvnw ./
-COPY .mvn .mvn/
+COPY .mvn/ .mvn/
 COPY pom.xml ./
 
 # Make mvnw executable and download all dependencies
@@ -27,7 +27,7 @@ RUN chmod +x mvnw && \
 FROM deps AS builder
 
 # Copy source code — this layer is invalidated on any source change
-COPY src src/
+COPY src/ src/
 
 # Build JAR, skip tests (tests run in CI pipeline separately)
 # -T 2: use 2 threads for faster parallel compilation
@@ -91,7 +91,7 @@ HEALTHCHECK \
 #   HeapDumpOnOutOfMemoryError: capture heap dump for diagnosis
 ENTRYPOINT ["java", \
     "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=67", \
+    "-XX:MaxRAMPercentage=67.0", \
     "-XX:+UseG1GC", \
     "-XX:MaxGCPauseMillis=200", \
     "-XX:+ExitOnOutOfMemoryError", \

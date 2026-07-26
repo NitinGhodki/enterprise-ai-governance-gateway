@@ -24,18 +24,20 @@ RUN pip install \
 
 # Download spaCy model into the installed packages directory
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_lg \
-    --prefix=/install/packages && \
-    # Verify model loaded correctly within the custom target paths
+    python -m spacy download en_core_web_sm && \
+    # Verify model loaded correctly
     PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -c "import en_core_web_lg; nlp = en_core_web_lg.load(); print('spaCy OK')"
-    
-# CRITICAL FIX: Direct the builder download paths to the matching cache folder
-ENV HF_HOME=/tmp/hf_cache
+    python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
 
-# Cache SentenceTransformer weights during the compilation process
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c \
-    "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+# Pre-download sentence-transformers model during build
+# Avoids 30-60s download on first container startup
+# Model cached in HuggingFace's default cache directory
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
+    python -c "
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')
+"
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 2: Runtime — Minimal production execution footprint
@@ -52,26 +54,26 @@ RUN apt-get update && \
 
 # STEP A: Setup system user profile first so paths can accept permissions properly
 RUN groupadd -g 10001 governance && \
-    useradd -u 10001 -g governance -m -s /sbin/nologin governance
+    useradd -u 10001 -g governance -s /sbin/nologin governance
 
 WORKDIR /app
 
 # STEP B: Import pre-compiled application python libraries
 COPY --from=builder /install/packages /usr/local
 
-# STEP C: Explicitly build and import model assets and map security permissions safely
-RUN mkdir -p /home/governance/.cache/huggingface && \
-    chown -R 10001:10001 /home/governance/.cache
+# Copy HuggingFace model cache (sentence-transformers model)
+COPY --from=builder /root/.cache/huggingface /home/governance/.cache/huggingface
 
-COPY --from=builder --chown=10001:10001 /tmp/hf_cache /home/governance/.cache/huggingface
+# Set correct ownership on model cache
+RUN chown -R 10001:10001 /home/governance/.cache
 
-# Copy application source code base files
+# Copy application source
 COPY --chown=10001:10001 app/ app/
 
-# Apply runtime system privileges restrictions
+# Switch to non-root
 USER 10001:10001
 
-# Configure optimal process thread variables
+# Environment for Python optimisation in production
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONHASHSEED=random \

@@ -1,0 +1,39 @@
+# Virtual environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test files
+tests/
+pytest.ini
+pyproject.toml
+setup.cfg
+
+# IDE files
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Environment files
+.env
+*.env.local
+
+# Documentation
+*.md
+docs/
+
+# Docker files
+Dockerfile
+
+# Python cache
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+.coverage

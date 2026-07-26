@@ -1,0 +1,34 @@
+# Build artifacts
+target/
+*.class
+*.jar
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Environment files — never in Docker image
+.env
+*.env.local
+
+# Test files
+src/test/
+**/*Test.java
+**/*Tests.java
+
+# Documentation
+*.md
+docs/
+
+# Docker files themselves
+Dockerfile
+docker-compose*.yml
+
+# Maven wrapper (already copied selectively)
+!.mvn/
+!mvnw
