@@ -13,7 +13,7 @@ RUN apt-get update && \
         curl && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements.txt ./
+COPY requirements.txt ./
 
 # Install packages into /install/packages prefix
 RUN pip install \
@@ -58,7 +58,7 @@ RUN mkdir -p /home/governance/.cache/huggingface && \
 COPY --from=builder --chown=10001:10001 /tmp/hf_cache /home/governance/.cache/huggingface
 
 # Copy application source code base files
-COPY --chown=10001:10001 ./app/ ./app/
+COPY --chown=10001:10001 app/ app/
 
 # Apply runtime system privileges restrictions
 USER 10001:10001
