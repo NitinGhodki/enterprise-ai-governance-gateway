@@ -24,7 +24,7 @@ RUN pip install \
 
 # Download spaCy model into the installed packages directory
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_sm && \
+    python -m spacy download en_core_web_sm --no-deps && \
     # Verify model loaded correctly
     PYTHONPATH=/install/packages/lib/python3.12/site-packages \
     python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
