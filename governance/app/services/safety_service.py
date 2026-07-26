@@ -68,12 +68,12 @@ class SafetyService:
         Load spaCy model and Presidio engines.
         Called once during FastAPI lifespan startup.
         """
-        import en_core_web_sm
+        import spacy
         log.info("loading_spacy_model")
 
         # Load en_core_web_sm — small English NLP model
         # Required by Presidio for NER-based PII detection
-        nlp = en_core_web_sm.load()
+        nlp = spacy.load("/usr/local/lib/python3.12/site-packages/en_core_web_sm/en_core_web_sm-3.7.1")
         self._spacy_loaded = True
         log.info("spacy_model_loaded",
                  vocab_size=len(nlp.vocab))
