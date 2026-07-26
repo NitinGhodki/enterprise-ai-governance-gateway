@@ -23,10 +23,7 @@ RUN pip install \
         -r requirements.txt
 
 # Download spaCy model explicitly into the target package location
-RUN pip install \
-        --no-cache-dir \
-        --prefix=/install/packages \
-        https://github.com
+RUN pip install --no-cache-dir --prefix=/install/packages https://github.com
 
 # Configure predictable location for model caching during builder step
 ENV HF_HOME=/tmp/hf_cache
