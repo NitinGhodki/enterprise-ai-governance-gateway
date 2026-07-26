@@ -46,7 +46,9 @@ RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
 # Avoids 30-60s download on first container startup
 # Model cached in HuggingFace's default cache directory
 # Pre-download sentence-transformers model during build
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages
+ENV HF_HOME=/tmp/hf_cache
+
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 3: Runtime — minimal image
@@ -61,6 +63,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     # Remove pip from runtime — packages are pre-installed
     pip uninstall -y pip setuptools wheel 2>/dev/null || true
+
+    # Copy from the explicit temporary folder instead of /root/
+COPY --from=builder /tmp/hf_cache /home/governance/.cache/huggingface
+RUN chown -R governance:governance /home/governance/.cache
 
 # Non-root user
 RUN groupadd -g 10001 governance && \
