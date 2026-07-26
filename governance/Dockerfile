@@ -23,13 +23,8 @@ RUN pip install \
         -r requirements.txt
 
 # Download spaCy model into the installed packages directory
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_sm \
-    --prefix=/install/packages && \
-    # Verify model loaded correctly within the custom target paths
-    PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -c "import en_core_web_sm; nlp = en_core_web_sm.load(); print('spaCy OK')"
-    
+RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
+
 # CRITICAL FIX: Direct the builder download paths to the matching cache folder
 ENV HF_HOME=/tmp/hf_cache
 
