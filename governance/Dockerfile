@@ -22,8 +22,12 @@ RUN pip install \
         --no-warn-script-location \
         -r requirements.txt
 
-# Configure predictable location for model caching during builder step
-ENV HF_HOME=/tmp/hf_cache
+# Download spaCy model into the installed packages directory
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
+    python -m spacy download en_core_web_sm && \
+    # Verify model loaded correctly
+    PYTHONPATH=/install/packages/lib/python3.12/site-packages \
+    python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
 
 # Cache SentenceTransformer weights during the compilation process
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
