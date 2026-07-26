@@ -29,8 +29,12 @@ RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
     PYTHONPATH=/install/packages/lib/python3.12/site-packages \
     python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
 
+# CRITICAL FIX: Direct the builder download paths to the matching cache folder
+ENV HF_HOME=/tmp/hf_cache
+
 # Cache SentenceTransformer weights during the compilation process
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c \
+    "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 2: Runtime — Minimal production execution footprint
@@ -47,14 +51,17 @@ RUN apt-get update && \
 
 # STEP A: Setup system user profile first so paths can accept permissions properly
 RUN groupadd -g 10001 governance && \
-    useradd -u 10001 -g governance -s /sbin/nologin governance
+    useradd -u 10001 -g governance -m -s /sbin/nologin governance
 
 WORKDIR /app
 
 # STEP B: Import pre-compiled application python libraries
 COPY --from=builder /install/packages /usr/local
 
-# STEP C: Import model assets and map security permissions safely
+# STEP C: Explicitly build and import model assets and map security permissions safely
+RUN mkdir -p /home/governance/.cache/huggingface && \
+    chown -R 10001:10001 /home/governance/.cache
+
 COPY --from=builder --chown=10001:10001 /tmp/hf_cache /home/governance/.cache/huggingface
 
 # Copy application source code base files
