@@ -13,7 +13,7 @@ RUN apt-get update && \
         curl && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY ./requirements.txt ./
 
 # Install packages into /install/packages prefix
 RUN pip install \
