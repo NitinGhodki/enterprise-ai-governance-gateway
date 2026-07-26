@@ -23,8 +23,10 @@ RUN pip install \
         -r requirements.txt
 
 # Download spaCy model explicitly into the target package location
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_sm
+RUN pip install \
+        --no-cache-dir \
+        --prefix=/install/packages \
+        https://github.com
 
 # Configure predictable location for model caching during builder step
 ENV HF_HOME=/tmp/hf_cache
