@@ -24,20 +24,21 @@ RUN pip install \
 
 # Download spaCy model into the installed packages directory
 RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -m spacy download en_core_web_sm && \
+    python -m spacy download en_core_web_sm \
+    --prefix=/install/packages && \
     # Verify model loaded correctly
     PYTHONPATH=/install/packages/lib/python3.12/site-packages \
     python -c "import spacy; nlp = spacy.load('en_core_web_sm'); print('spaCy OK')"
 
+# CRITICAL FIX: Direct the builder download paths to the matching cache folder
+ENV HF_HOME=/tmp/hf_cache
+
 # Pre-download sentence-transformers model during build
 # Avoids 30-60s download on first container startup
 # Model cached in HuggingFace's default cache directory
-RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages \
-    python -c "
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-print(f'Model loaded: {model.get_sentence_embedding_dimension()} dims')
-"
+RUN PYTHONPATH=/install/packages/lib/python3.12/site-packages python -c \
+    "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
 
 # ═══════════════════════════════════════════════════════════════
 # Stage 2: Runtime — Minimal production execution footprint
@@ -61,8 +62,11 @@ WORKDIR /app
 # STEP B: Import pre-compiled application python libraries
 COPY --from=builder /install/packages /usr/local
 
-# Copy HuggingFace model cache (sentence-transformers model)
-COPY --from=builder /root/.cache/huggingface /home/governance/.cache/huggingface
+# STEP C: Explicitly build and import model assets and map security permissions safely
+RUN mkdir -p /home/governance/.cache/huggingface && \
+    chown -R 10001:10001 /home/governance/.cache
+
+COPY --from=builder --chown=10001:10001 /tmp/hf_cache /home/governance/.cache/huggingface
 
 # Set correct ownership on model cache
 RUN chown -R 10001:10001 /home/governance/.cache
