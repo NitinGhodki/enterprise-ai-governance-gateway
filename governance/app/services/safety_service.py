@@ -15,6 +15,7 @@ from typing import Optional
 
 import structlog
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 
 from app.config import Settings
@@ -61,33 +62,84 @@ class SafetyService:
         self._settings = settings
         self._analyzer: Optional[AnalyzerEngine] = None
         self._anonymizer: Optional[AnonymizerEngine] = None
-        self._spacy_loaded = False
+        self._nlp_loaded = False
 
     async def initialize(self) -> None:
         """
-        Load spaCy model and Presidio engines.
-        Called once during FastAPI lifespan startup.
+        Load spaCy and Presidio once at startup.
+
+        Why we configure Presidio with an explicit spaCy model:
+          Default AnalyzerEngine() calls spacy.load() internally
+          with no control over which model or configuration.
+          Explicit configuration:
+            - We control the model name (en_core_web_sm)
+            - We load once, pass the reference to Presidio
+            - No duplicate loading
+            - Health check reflects the actual model Presidio uses
         """
         import spacy
-        log.info("loading_spacy_model")
+        log.info("loading_spacy_model", model="en_core_web_sm")
 
-        # Load en_core_web_sm — small English NLP model
-        # Required by Presidio for NER-based PII detection
-        nlp = spacy.load("en_core_web_sm")
-        self._spacy_loaded = True
-        log.info("spacy_model_loaded",
-                 vocab_size=len(nlp.vocab))
+        # Load spaCy model explicitly
+        # en_core_web_sm components used by Presidio:
+        #   tok2vec:  token embeddings (fast, 12MB)
+        #   ner:      named entity recognition (PERSON, ORG, GPE, etc.)
+        # Components NOT needed for PII detection (disabled for speed):
+        #   parser:   dependency parsing (syntax tree)
+        #   tagger:   part-of-speech tagging
+        nlp = spacy.load(
+            "en_core_web_sm",
+            disable=["parser", "tagger"]   # not needed, saves ~20ms per call
+        )
 
-        # Presidio AnalyzerEngine with default recognizers
-        # Detects: PERSON, EMAIL, PHONE, CREDIT_CARD, IP_ADDRESS,
-        #          LOCATION, DATE_TIME, NRP (nationality/religion)
-        self._analyzer = AnalyzerEngine()
+        # Verify NER pipeline is active
+        if "ner" not in nlp.pipe_names:
+            raise RuntimeError(
+                "en_core_web_sm NER pipeline not available. "
+                "Reinstall: python -m spacy download en_core_web_sm"
+            )
+
+        self._nlp_loaded = True
+
+        # Configure Presidio to use OUR spaCy instance
+        # NlpEngineProvider wraps the loaded nlp object for Presidio's interface
+        nlp_engine_config = {
+            "nlp_engine_name": "spacy",
+            "models": [
+                {
+                    "lang_code": "en",
+                    "model_name": "en_core_web_sm"
+                }
+            ]
+        }
+
+        provider = NlpEngineProvider(nlp_configuration=nlp_engine_config)
+        nlp_engine = provider.create_engine()
+
+        # AnalyzerEngine: combines Presidio's pattern recognisers
+        # (regex for credit cards, email, etc.) with spaCy's NER.
+        # Together they catch PII that neither can catch alone.
+        self._analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
         self._anonymizer = AnonymizerEngine()
 
-        log.info("presidio_engines_loaded")
+        log.info(
+            "safety_service_ready",
+            spacy_model="en_core_web_sm",
+            ner_labels=list(nlp.get_pipe("ner").labels),
+            presidio_recognisers=len(self._analyzer.registry.recognizers)
+        )
+
 
     def is_spacy_loaded(self) -> bool:
-        return self._spacy_loaded
+        """
+        Returns True only when BOTH spaCy AND Presidio are initialised.
+        Health check reflects actual service readiness, not just import success.
+        """
+        return (
+            self._nlp_loaded
+            and self._analyzer is not None
+            and self._anonymizer is not None
+        )
 
     async def evaluate(self, request: SafetyCheckRequest) -> SafetyCheckResponse:
         """
@@ -128,7 +180,10 @@ class SafetyService:
         redacted_message: Optional[str] = None
 
         if self._settings.safety_pii_redact and self._analyzer:
-            redacted_message, pii_detected = self._check_and_redact_pii(
+            import asyncio
+            # Presidio + spaCy NER is CPU-bound — run in thread pool
+            redacted_message, pii_detected = await asyncio.to_thread(
+                self._check_and_redact_pii,
                 request.message
             )
 
