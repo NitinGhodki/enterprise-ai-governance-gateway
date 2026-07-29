@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_user_created
 INSERT INTO users (email, password, api_key, role)
 VALUES (
     'admin@aigovernance.local',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCkpDmJckk2x3BbBE.P5xCO',
+    '$2a$12$n9oQ8IZru87GWVDy.EqSDe/MT/WmJO.VgPRKyz1cr0dTN8KCN3J/G',
     'gw-admin-key-change-in-production-00000001',
     'ADMIN'
 ) ON CONFLICT (email) DO NOTHING;

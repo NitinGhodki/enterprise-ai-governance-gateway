@@ -1,0 +1,165 @@
+name: CI — Enterprise AI Governance Gateway
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Python governance service tests ──────────────────────────────────────────
+  python-tests:
+    name: Python Governance Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: governance
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m spacy download en_core_web_sm
+
+      - name: Run fast tests (no LLM calls)
+        env:
+          HF_API_KEY: "test-key-not-real"
+          ENVIRONMENT: "test"
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            -v \
+            --tb=short \
+            --junitxml=test-results/pytest.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-test-results
+          path: governance/test-results/
+
+  # ── Java gateway tests ────────────────────────────────────────────────────────
+  java-tests:
+    name: Java Gateway Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Run tests (WireMock — no real APIs)
+        env:
+          JWT_SECRET: "ci-test-secret-minimum-32-characters-long"
+          HF_API_KEY: "test-key-not-real"
+        run: |
+          ./mvnw test \
+            --no-transfer-progress \
+            -Dspring.profiles.active=test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: java-test-results
+          path: gateway/target/surefire-reports/
+
+  # ── Docker build validation ───────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    needs: [python-tests, java-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: gateway
+          push: false
+          tags: enterprise-ai-gateway:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build governance image
+        uses: docker/build-push-action@v5
+        with:
+          context: governance
+          push: false
+          tags: enterprise-ai-governance:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Local smoke test ──────────────────────────────────────────────────────────
+  smoke-test:
+    name: Local Smoke Test
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test .env file
+        run: |
+          cat > .env << EOF
+          HF_API_KEY=test-key-placeholder
+          DB_PASSWORD=ci-test-password
+          JWT_SECRET=ci-test-secret-minimum-32-characters-here
+          GRAFANA_PASSWORD=admin
+          GATEWAY_PORT=8080
+          EOF
+
+      - name: Start services
+        run: |
+          docker-compose up -d postgres redis
+          sleep 10
+          docker-compose up -d governance
+          sleep 30
+          docker-compose up -d gateway
+          sleep 20
+
+      - name: Wait for gateway health
+        run: |
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:8080/actuator/health | grep -q UP; then
+              echo "Gateway healthy after $((i * 5))s"
+              break
+            fi
+            echo "Waiting... ($i/12)"
+            sleep 5
+          done
+
+      - name: Run smoke tests
+        run: chmod +x scripts/smoke_test.sh && ./scripts/smoke_test.sh http://localhost:8080
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker-compose logs gateway
+          docker-compose logs governance
+
+      - name: Teardown
+        if: always()
+        run: docker-compose down -v
