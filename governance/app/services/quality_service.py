@@ -73,7 +73,7 @@ class QualityService:
         self._embedding_model: Optional[SentenceTransformer] = None
         self._hf_api_key = settings.hf_api_key
         self._hf_model = settings.hf_model
-        self._hf_base_url = "https://api-inference.huggingface.co/v1"
+        self._hf_base_url = "https://router.huggingface.co/v1"
 
     def _get_embedding_model(self) -> SentenceTransformer:
         if self._embedding_model is None:

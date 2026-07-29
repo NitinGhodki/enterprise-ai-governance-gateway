@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # HuggingFace (used by RAGAS evaluator)
     hf_api_key: str = Field(default="", alias="HF_API_KEY")
     hf_model: str = Field(
-        default="mistralai/Mistral-7B-Instruct-v0.3",
+        default="google/gemma-4-26B-A4B-it",
         alias="HF_MODEL"
     )
 

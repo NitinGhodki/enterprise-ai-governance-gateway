@@ -41,15 +41,18 @@ public class HuggingFaceAdapter implements LlmAdapter {
     private final WebClient webClient;
     private final String apiKey;
     private final String defaultModel;
+    private final String hfBaseUrl;
 
     public HuggingFaceAdapter(
             @Qualifier("llmWebClient") WebClient webClient,
             @Value("${gateway.llm.huggingface.api-key}") String apiKey,
-            @Value("${gateway.llm.huggingface.model}") String defaultModel) {
+            @Value("${gateway.llm.huggingface.model}") String defaultModel,
+            @Value("${gateway.llm.huggingface.base-url}") String hfBaseUrl) {
 
         this.webClient    = webClient;
         this.apiKey       = apiKey;
         this.defaultModel = defaultModel;
+        this.hfBaseUrl    = hfBaseUrl;
     }
 
     @Override
@@ -70,7 +73,7 @@ public class HuggingFaceAdapter implements LlmAdapter {
                 request.requestId(), model);
 
         return webClient.post()
-                .uri("https://api-inference.huggingface.co/v1/chat/completions")
+                .uri(hfBaseUrl + "/chat/completions")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .bodyValue(hfRequest)
                 .retrieve()

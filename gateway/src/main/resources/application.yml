@@ -95,7 +95,7 @@ gateway:
 
   llm:
     huggingface:
-      base-url: https://api-inference.huggingface.co/v1
+      base-url: https://router.huggingface.co/v1
       api-key: ${HF_API_KEY:}
       model: ${HF_MODEL:google/gemma-4-26B-A4B-it}
       timeout-seconds: 60
