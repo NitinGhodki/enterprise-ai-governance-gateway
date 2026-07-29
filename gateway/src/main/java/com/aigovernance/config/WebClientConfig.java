@@ -54,7 +54,7 @@ public class WebClientConfig {
      */
     @Bean("governanceWebClient")
     public WebClient governanceWebClient() {
-        HttpClient httpClient = buildHttpClient(governanceTimeoutSeconds);
+        HttpClient httpClient = buildHttpClient(governanceTimeoutSeconds, false);
 
         return WebClient.builder()
                 .baseUrl(governanceBaseUrl)
@@ -68,7 +68,7 @@ public class WebClientConfig {
 
     @Bean("llmWebClient")
     public WebClient llmWebClient() {
-        HttpClient httpClient = buildHttpClient(llmTimeoutSeconds);
+        HttpClient httpClient = buildHttpClient(llmTimeoutSeconds, true);
 
         return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
@@ -81,13 +81,8 @@ public class WebClientConfig {
     /**
      * Log outbound requests without logging body content (PII risk).
      */
-    private HttpClient buildHttpClient(int timeoutSeconds) {
-        return HttpClient.create()
-                // ── THE FIX ────────────────────────────────────────────────
-                // Use JVM's getaddrinfo() instead of Netty's async resolver.
-                // Resolves the Railway/Docker DNS search domain failure.
-                .resolver(DefaultAddressResolverGroup.INSTANCE)
-                // ──────────────────────────────────────────────────────────
+    private HttpClient buildHttpClient(int timeoutSeconds, boolean preferIpv4) {
+        HttpClient client = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
                 .responseTimeout(Duration.ofSeconds(timeoutSeconds))
                 .doOnConnected(conn -> conn
@@ -96,6 +91,18 @@ public class WebClientConfig {
                         .addHandlerLast(new WriteTimeoutHandler(
                                 15, TimeUnit.SECONDS))
                 );
+
+        if (preferIpv4) {
+            // External calls only — prefer IPv4 to avoid Railway's IPv6 issue
+            // DefaultAddressResolverGroup uses JVM resolver which respects
+            // -Djava.net.preferIPv4Addresses=true when set.
+            // Without the JVM flag, this explicit resolver handles it directly.
+            client = client.resolver(
+                    io.netty.resolver.DefaultAddressResolverGroup.INSTANCE
+            );
+        }
+
+        return client;
     }
 
     private ExchangeFilterFunction loggingFilter(String clientName) {
