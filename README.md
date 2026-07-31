@@ -319,8 +319,6 @@ In-memory rate limiting is per-instance. If the gateway scales to 3 instances, e
 
 ## Repository structure
 
-## Project Structure
-
 ```text
 enterprise-ai-governance-gateway/
 ├── gateway/                             # Spring Boot Gateway Application
