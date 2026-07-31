@@ -1,6 +1,7 @@
 server:
   port: ${PORT:8080}
   # Netty tuning for reactive stack under 300MB heap
+  shutdown: graceful
   netty:
     connection-timeout: 10s
     idle-timeout: 60s
@@ -8,6 +9,8 @@ server:
 spring:
   application:
     name: enterprise-ai-governance-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
   # R2DBC — reactive PostgreSQL
   r2dbc:

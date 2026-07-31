@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        Logback Spring configuration — two profiles:
+        local:      human-readable coloured console output
+        production: structured JSON output (Railway, Datadog, Grafana Loki)
+
+        Spring Boot activates the correct profile via
+        spring.profiles.active in application.yml or SPRING_PROFILE env var.
+    -->
+    <!-- ── Local development: readable coloured output ─────────────────── -->
+    <springProfile name="local,default">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>
+                    %d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{30}) - %msg%n
+                </pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+
+        <logger name="com.aigovernance" level="DEBUG"/>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="io.r2dbc" level="WARN"/>
+        <logger name="reactor.netty" level="WARN"/>
+    </springProfile>
+
+    <!-- ── Production: structured JSON logs ────────────────────────────── -->
+    <springProfile name="production">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!--
+                    LogstashEncoder produces JSON per line — one log event per line.
+                    Each line is a valid JSON object queryable by log aggregators.
+
+                    Fields automatically included:
+                        @timestamp, @version, message, logger_name,
+                        thread_name, level, level_value, stack_trace (on exception)
+
+                    Custom fields below added to every log line:
+                -->
+                <customFields>
+                    {"service":"enterprise-ai-governance-gateway","environment":"production"}
+                </customFields>
+
+                <!-- Include MDC fields — set per-request context -->
+                <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>provider</includeMdcKeyName>
+
+                <!-- Shorten logger name to save space -->
+                <shortenedLoggerNameLength>30</shortenedLoggerNameLength>
+
+                <!-- Do not include caller info — too expensive in production -->
+                <includeCallerData>false</includeCallerData>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+
+        <logger name="com.aigovernance" level="INFO"/>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="io.r2dbc" level="WARN"/>
+        <logger name="reactor.netty" level="WARN"/>
+        <logger name="org.springframework.ai" level="WARN"/>
+    </springProfile>
+
+</configuration>

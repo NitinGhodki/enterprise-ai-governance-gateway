@@ -80,16 +80,20 @@ public class HuggingFaceAdapter implements LlmAdapter {
                 .bodyToMono(HfChatResponse.class)
                 .map(response -> {
                     long latencyMs = Instant.now().toEpochMilli() - startMs;
-                    String content = String.valueOf(response.choices().get(0).message());
+                    HfChatResponse.Choice.Message msg = response.choices().get(0).message();
+                    String content = (msg != null && msg.content() != null)
+                            ? msg.content()
+                            : "";
 
                     int promptTokens     = response.usage() != null
                             ? response.usage().promptTokens() : 0;
                     int completionTokens = response.usage() != null
                             ? response.usage().completionTokens() : 0;
 
-                    log.info("[HF] Completion done requestId={} latency={}ms tokens={}/{}",
-                            request.requestId(), latencyMs,
-                            promptTokens, completionTokens);
+                    log.info("[HF] ✓ requestId={} model={} latency={}ms " +
+                                    "tokens={}/{} contentLength={}",
+                            request.requestId(), model, latencyMs,
+                            promptTokens, completionTokens, content.length());
 
                     return new CompletionResult(
                             content, model, providerName(),
@@ -107,18 +111,21 @@ public class HuggingFaceAdapter implements LlmAdapter {
                 })
                 .onErrorMap(
                         e -> !(e instanceof LlmProviderException),
-                        e -> new LlmProviderException(
-                                providerName(),
-                                "Connection failed: " + e.getMessage(),
-                                e
-                        )
+                        e -> {
+                            log.error("[HF] Unexpected error: {}", e.getMessage());
+                            return new LlmProviderException(
+                                    providerName(),
+                                    "Connection failed: " + e.getMessage(),
+                                    e
+                            );
+                        }
                 );
     }
 
     @Override
     public Mono<Boolean> isHealthy() {
         return webClient.get()
-                .uri("https://api-inference.huggingface.co/v1/models")
+                .uri(hfBaseUrl + "/models")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .retrieve()
                 .toBodilessEntity()

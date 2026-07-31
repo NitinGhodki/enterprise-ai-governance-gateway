@@ -30,6 +30,62 @@ from app.services.cost_service import CostService
 from app.services.embedding_service import EmbeddingService
 from app.exceptions.governance_exceptions import GovernanceException
 
+import logging
+import os
+
+def configure_logging() -> None:
+    """
+    Configure structlog for the environment.
+
+    Local:      human-readable coloured output (ConsoleRenderer)
+    Production: JSON output (JSONRenderer) queryable by log aggregators
+
+    structlog is already used throughout the services with:
+        log = structlog.get_logger()
+        log.info("event_name", field1=value1, field2=value2)
+
+    Every log call produces a structured event with all fields
+    available for querying in Railway logs or Grafana Loki.
+    """
+    is_production = os.getenv("ENVIRONMENT", "production") == "production"
+    log_level_str = os.getenv("LOG_LEVEL", "INFO")
+
+    logging.basicConfig(
+        format="%(message)s",
+        level=logging.getLevelName(log_level_str),
+    )
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+    ]
+
+    if is_production:
+        # JSON output — one JSON object per line
+        # Queryable by any log aggregation system
+        processors = shared_processors + [
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ]
+    else:
+        # Human-readable coloured output for local development
+        processors = shared_processors + [
+            structlog.dev.ConsoleRenderer(colors=True),
+        ]
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+
+# Call before app creation
+configure_logging()
 log = structlog.get_logger()
 settings = get_settings()
 
@@ -129,11 +185,28 @@ async def governance_exception_handler(
 # ── Middleware: request timing ────────────────────────────────────────────────
 
 @app.middleware("http")
-async def add_timing_header(request: Request, call_next):
+async def add_timing_and_context(request: Request, call_next):
+    import uuid
+    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4())[:8])
     start = time.perf_counter()
+
+    # Bind request_id to structlog context for this request
+    # Every log.info() call within this request automatically includes it
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+
     response = await call_next(request)
     elapsed_ms = int((time.perf_counter() - start) * 1000)
+
     response.headers["X-Processing-Ms"] = str(elapsed_ms)
+    response.headers["X-Request-Id"] = request_id
+
+    log.info("http.request",
+             method=request.method,
+             path=request.url.path,
+             status=response.status_code,
+             elapsed_ms=elapsed_ms)
+
     return response
 
 

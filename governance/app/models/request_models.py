@@ -72,7 +72,14 @@ class QualityCheckRequest(BaseModel):
     Evaluates faithfulness and relevancy.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config = {
+        "extra": "forbid",
+        "alias_generator": AliasGenerator(
+            validation_alias=to_camel,  # Read camelCase from incoming JSON
+            serialization_alias=to_camel # Write camelCase back out if needed
+        ),
+        "populate_by_name": True  # Allows Python code to still use snake_case keyword args
+    }
 
     request_id: str = Field(..., min_length=1, max_length=36)
     user_id: str = Field(..., min_length=1, max_length=36)
@@ -99,7 +106,14 @@ class CostEstimateRequest(BaseModel):
     Counts tokens accurately using tiktoken and returns USD cost.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config = {
+        "extra": "forbid",
+        "alias_generator": AliasGenerator(
+            validation_alias=to_camel,  # Read camelCase from incoming JSON
+            serialization_alias=to_camel # Write camelCase back out if needed
+        ),
+        "populate_by_name": True  # Allows Python code to still use snake_case keyword args
+    }
 
     prompt_text: str = Field(..., min_length=1, max_length=12000)
     completion_text: str = Field(..., min_length=0, max_length=16000)
@@ -113,6 +127,13 @@ class EmbeddingRequest(BaseModel):
     Returns a float vector for cosine similarity comparison in Java.
     """
 
-    model_config = {"extra": "forbid"}
+    model_config = {
+        "extra": "forbid",
+        "alias_generator": AliasGenerator(
+            validation_alias=to_camel,  # Read camelCase from incoming JSON
+            serialization_alias=to_camel # Write camelCase back out if needed
+        ),
+        "populate_by_name": True  # Allows Python code to still use snake_case keyword args
+    }
 
     text: str = Field(..., min_length=1, max_length=8000)

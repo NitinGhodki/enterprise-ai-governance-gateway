@@ -69,6 +69,7 @@ USER 10001:10001
 
 EXPOSE 8080
 
+STOPSIGNAL SIGTERM
 # Health check: wget is available in Alpine JRE image
 # --spider: only check HTTP status, do not download body
 # --quiet: suppress wget output
@@ -101,4 +102,4 @@ ENTRYPOINT ["java", \
     "-XX:+DisableAttachMechanism", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-Dspring.profiles.active=${SPRING_PROFILE:production}", \
-    "-jar", "app.jar"]
+    "-jar", "app.jar", "sh", "-c", "java $JAVA_OPTS -jar app.jar"]

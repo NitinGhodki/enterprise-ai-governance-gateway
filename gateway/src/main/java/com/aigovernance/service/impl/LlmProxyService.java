@@ -11,6 +11,7 @@ import com.aigovernance.exception.GovernanceViolationException;
 import com.aigovernance.governance.GovernanceClient;
 import com.aigovernance.service.LlmAdapter;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -102,39 +103,53 @@ public class LlmProxyService {
         log.info("[Proxy] START requestId={} userId={} provider={} model={}",
                 requestId, userId, provider, model);
 
-        // Step 1: Semantic cache lookup
-        return cacheService.lookup(request.message())
-                .flatMap(cacheEntry -> {
-                    // Cache HIT — return immediately without calling LLM
-                    log.info("[Proxy] Cache HIT requestId={}", requestId);
-                    long latencyMs = Instant.now().toEpochMilli() - startMs;
-
-                    GovernanceReport report = new GovernanceReport(
-                            true, 1.0, List.of(), 0.0
-                    );
-                    ChatResponse response = buildResponse(
-                            requestId, request.message(),
-                            cacheEntry.answer(),
-                            cacheEntry.provider(), cacheEntry.model(),
-                            cacheEntry.promptTokens(), cacheEntry.completionTokens(),
-                            0.0, latencyMs, true, report
-                    );
-
-                    // Audit cache hit asynchronously
-                    auditService.recordAsync(
-                            userId, requestId, cacheEntry.provider(),
-                            cacheEntry.model(), cacheEntry.promptTokens(),
-                            cacheEntry.completionTokens(), 0.0,
-                            latencyMs, true, true, 1.0, List.of()
-                    );
-
-                    return Mono.just(response);
+        return Mono.just(requestId)
+                .doOnNext(id -> {
+                    MDC.put("requestId", id);
+                    MDC.put("userId", userId);
+                    MDC.put("provider", provider);
                 })
-                // Step 2: Cache MISS — full pipeline
-                .switchIfEmpty(
-                        processFullPipeline(request, userId, requestId,
-                                startMs, provider, model)
-                );
+                .flatMap(id -> {
+                    log.info("request.start model={} cacheCheckFirst=true", model);
+                    // Step 1: Semantic cache lookup
+                    return cacheService.lookup(request.message())
+                            .flatMap(cacheEntry -> {
+                                log.info("request.complete source=cache latencyMs={}",
+                                        Instant.now().toEpochMilli() - startMs);
+
+                                // ... rest of cache hit handling unchanged
+                                long latencyMs = Instant.now().toEpochMilli() - startMs;
+                                GovernanceReport report = new GovernanceReport(
+                                        true, 1.0, List.of(), 0.0
+                                );
+                                ChatResponse response = buildResponse(
+                                        requestId, request.message(),
+                                        cacheEntry.answer(),
+                                        cacheEntry.provider(), cacheEntry.model(),
+                                        cacheEntry.promptTokens(), cacheEntry.completionTokens(),
+                                        0.0, latencyMs, true, report
+                                );
+
+                                // Step 1: Semantic cache lookup
+                                auditService.recordAsync(
+                                        userId, requestId, cacheEntry.provider(),
+                                        cacheEntry.model(), cacheEntry.promptTokens(),
+                                        cacheEntry.completionTokens(), 0.0,
+                                        latencyMs, true, true, 1.0, List.of());
+                                return Mono.just(response);
+                            })
+                            // Step 2: Cache MISS — full pipeline
+                            .switchIfEmpty(
+                                    processFullPipeline(request, userId, requestId,
+                                            startMs, provider, model)
+                            );
+                })
+                .doFinally(signal -> {
+                    // Always clear MDC after request completes
+                    MDC.remove("requestId");
+                    MDC.remove("userId");
+                    MDC.remove("provider");
+                });
     }
 
     // Private: full pipeline on cache miss 
@@ -186,7 +201,7 @@ public class LlmProxyService {
                                     // Step 3: LLM call
                                     adapter.complete(new CompletionRequest(
                                             model, request.systemPrompt(),
-                                            effectiveMessage, 512, 0.7, requestId
+                                            effectiveMessage, 10000, 0.7, requestId
                                     ))
                             )
                             .flatMap(completionResult ->

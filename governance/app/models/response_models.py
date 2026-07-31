@@ -31,6 +31,13 @@ class SafetyCheckResponse(BaseModel):
 class QualityCheckResponse(BaseModel):
     """Response from /governance/quality"""
 
+    model_config = {
+        "alias_generator": AliasGenerator(
+            serialization_alias=to_camel # Write camelCase back out to Java
+        ),
+        "populate_by_name": True
+    }
+
     request_id: str
     quality_passed: bool
     faithfulness_score: float = Field(ge=0.0, le=1.0)
@@ -43,6 +50,13 @@ class QualityCheckResponse(BaseModel):
 class CostEstimateResponse(BaseModel):
     """Response from /governance/cost"""
 
+    model_config = {
+        "alias_generator": AliasGenerator(
+            serialization_alias=to_camel # Write camelCase back out to Java
+        ),
+        "populate_by_name": True
+    }
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -54,6 +68,13 @@ class CostEstimateResponse(BaseModel):
 class EmbeddingResponse(BaseModel):
     """Response from /governance/embed"""
 
+    model_config = {
+        "alias_generator": AliasGenerator(
+            serialization_alias=to_camel # Write camelCase back out to Java
+        ),
+        "populate_by_name": True
+    }
+    
     embedding: list[float]
     dimensions: int
     model: str
@@ -61,6 +82,13 @@ class EmbeddingResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Response from /health"""
+    
+    model_config = {
+        "alias_generator": AliasGenerator(
+            serialization_alias=to_camel # Write camelCase back out to Java
+        ),
+        "populate_by_name": True
+    }
 
     status: str
     service: str
