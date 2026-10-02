@@ -3,7 +3,6 @@
 A production-grade AI infrastructure system that adds safety, quality,
 cost control, and observability to any LLM-powered application.
 
-**Live demo:** https://your-gateway.railway.app/api/v1/status  
 **Architecture:** Java Spring Boot (WebFlux) + Python FastAPI  
 **Deployment:** Railway (public) + Docker Compose (local)
 
